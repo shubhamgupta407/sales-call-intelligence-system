@@ -67,10 +67,7 @@ Backend: Deployed (may take a few seconds to respond on first request)
   "buying_signals": ["Interested in discount"],
   "next_action": "Follow up with pricing clarification"
 }
-🔮 Future Improvements
-Improve backend scalability
-Enhance transcript storage and analytics
-Optimize LLM response reliability
+
 
 
 
