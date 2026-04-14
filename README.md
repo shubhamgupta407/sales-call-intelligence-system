@@ -51,7 +51,7 @@ Backend: Deployed (may take a few seconds to respond on first request)
 
 ---
 
-🔮 Future Improvements
+##🔮 Future Improvements
 Improve backend scalability
 Enhance transcript storage and analytics
 Optimize LLM response reliability
