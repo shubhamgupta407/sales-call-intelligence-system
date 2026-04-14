@@ -6,6 +6,7 @@ import numpy as np
 import requests
 import json
 import re
+import os
 from sentence_transformers import SentenceTransformer
 
 app = FastAPI()
@@ -19,8 +20,8 @@ index = faiss.read_index("faiss_index.bin")
 with open("chunks.pkl", "rb") as f:
     chunks = pickle.load(f)
 
-# 🔥 OpenRouter key
-OPENROUTER_API_KEY = "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"
+# 🔐 Secure API Key (from environment)
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 # ------------------------
 # Helper Functions
