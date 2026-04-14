@@ -1,4 +1,5 @@
 # Sales Call Intelligence System (RAG + LLM)
+Production-style AI system simulating real-world sales intelligence workflows.
 
 AI-powered system that analyzes sales call transcripts and generates structured business insights.
 
@@ -7,8 +8,8 @@ Built using a RAG pipeline with FAISS and LLMs to extract customer intent, objec
 ---
 
 ## 🚀 Live Demo
-Frontend: https://salesanalyze.netlify.app/
-(API backend under optimization)
+Frontend: https://salesanalyze.netlify.app  
+Backend: Deployed (may take a few seconds to respond on first request)
 
 ---
 
@@ -22,6 +23,13 @@ Frontend: https://salesanalyze.netlify.app/
 - Fallback mechanism for seamless UI experience
 
 ---
+
+## 🎯 Use Case
+
+- Sales teams can analyze call transcripts automatically  
+- Identify customer intent and objections  
+- Get AI-driven next action recommendations  
+- Improve conversion and decision-making  
 
 ## 🛠 Tech Stack
 
