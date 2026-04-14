@@ -16,10 +16,11 @@ app = FastAPI()
 # 🔥 Load embedding model
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
-# 🔥 Load FAISS + chunks
-index = faiss.read_index("faiss_index.bin")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-with open("chunks.pkl", "rb") as f:
+index = faiss.read_index(os.path.join(BASE_DIR, "faiss_index.bin"))
+
+with open(os.path.join(BASE_DIR, "chunks.pkl"), "rb") as f:
     chunks = pickle.load(f)
 
 # 🔐 Secure API Key (from environment)
