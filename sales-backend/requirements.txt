@@ -3,5 +3,8 @@ uvicorn
 faiss-cpu
 numpy
 requests
-sentence-transformers
+python-dotenv
 pydantic
+
+sentence-transformers==2.2.2
+torch==2.2.2
