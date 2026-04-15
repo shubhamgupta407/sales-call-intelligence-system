@@ -8,49 +8,83 @@ import json
 import re
 import os
 from dotenv import load_dotenv
-load_dotenv()
 from sentence_transformers import SentenceTransformer
+
+load_dotenv()
 
 app = FastAPI()
 
-# 🔥 Load embedding model
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-
+# -----------------------------
+# 🔥 Base Directory
+# -----------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-index = faiss.read_index(os.path.join(BASE_DIR, "faiss_index.bin"))
+# -----------------------------
+# 🔥 Load Model (SAFE)
+# -----------------------------
+embedding_model = None
 
-with open(os.path.join(BASE_DIR, "chunks.pkl"), "rb") as f:
-    chunks = pickle.load(f)
+try:
+    print("⏳ Loading embedding model...")
+    embedding_model = SentenceTransformer(os.path.join(BASE_DIR, "model"))
+    print("✅ Model loaded successfully")
+except Exception as e:
+    print("❌ Model loading failed:", e)
 
-# 🔐 Secure API Key (from environment)
+# -----------------------------
+# 🔥 Load FAISS + Data (SAFE)
+# -----------------------------
+try:
+    index = faiss.read_index(os.path.join(BASE_DIR, "faiss_index.bin"))
+    with open(os.path.join(BASE_DIR, "chunks.pkl"), "rb") as f:
+        chunks = pickle.load(f)
+    print("✅ FAISS + chunks loaded")
+except Exception as e:
+    print("❌ Error loading FAISS/chunks:", e)
+    index = None
+    chunks = []
+
+# -----------------------------
+# 🔐 API Key
+# -----------------------------
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# ------------------------
-# Helper Functions
-# ------------------------
-
+# -----------------------------
+# 🧠 Helper Functions
+# -----------------------------
 def retrieve(query, k=3):
-    query_embedding = embedding_model.encode([query])
-    distances, indices = index.search(np.array(query_embedding), k)
-    return [chunks[i] for i in indices[0]]
+    if embedding_model is None or index is None:
+        return []
+
+    try:
+        query_embedding = embedding_model.encode([query])
+        distances, indices = index.search(np.array(query_embedding), k)
+        return [chunks[i] for i in indices[0] if i < len(chunks)]
+    except Exception as e:
+        print("Retrieve error:", e)
+        return []
 
 def call_llm(prompt):
-    url = "https://openrouter.ai/api/v1/chat/completions"
+    try:
+        url = "https://openrouter.ai/api/v1/chat/completions"
 
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json"
-    }
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json"
+        }
 
-    data = {
-        "model": "meta-llama/llama-3-8b-instruct",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.2
-    }
+        data = {
+            "model": "meta-llama/llama-3-8b-instruct",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.2
+        }
 
-    response = requests.post(url, headers=headers, json=data)
-    return response.json()
+        response = requests.post(url, headers=headers, json=data, timeout=20)
+        return response.json()
+
+    except Exception as e:
+        print("LLM error:", e)
+        return {}
 
 def extract_text(response):
     try:
@@ -70,37 +104,60 @@ def extract_json(text):
                 pass
 
     return {
-        "summary": "",
+        "summary": "Analysis unavailable",
         "customer_intent": "Medium",
         "objections": [],
         "buying_signals": [],
-        "next_action": "Manual review needed"
+        "next_action": "Retry analysis"
     }
 
 def refine_output(data):
     weak_phrases = ["need to think", "not sure", "maybe later"]
 
-    if any(p in data["next_action"].lower() for p in weak_phrases):
-        data["next_action"] = "Follow up with the customer to address concerns"
+    try:
+        if any(p in data["next_action"].lower() for p in weak_phrases):
+            data["next_action"] = "Follow up with the customer to address concerns"
+    except:
+        pass
 
     return data
 
-# ------------------------
-# API Schema
-# ------------------------
-
+# -----------------------------
+# 📦 Request Schema
+# -----------------------------
 class TranscriptRequest(BaseModel):
     query: str
 
-# ------------------------
-# MAIN API
-# ------------------------
+# -----------------------------
+# 🏠 Health Check (IMPORTANT)
+# -----------------------------
+@app.get("/")
+def home():
+    return {"status": "running"}
 
+# -----------------------------
+# 🚀 MAIN API
+# -----------------------------
 @app.post("/analyze")
 def analyze(request: TranscriptRequest):
-    retrieved_chunks = retrieve(request.query)
-    context = "\n".join(retrieved_chunks)
 
+    query = request.query.strip()
+
+    # ❌ Input validation
+    if not query or len(query) < 10:
+        return {
+            "summary": "Input too short",
+            "customer_intent": "Low",
+            "objections": [],
+            "buying_signals": [],
+            "next_action": "Provide a valid transcript"
+        }
+
+    # 🔍 Retrieve context
+    retrieved_chunks = retrieve(query)
+    context = "\n".join(retrieved_chunks) if retrieved_chunks else "No relevant context found"
+
+    # 🧠 Prompt
     prompt = f"""
 You are an AI Sales Call Intelligence System.
 
@@ -120,9 +177,11 @@ Return ONLY valid JSON:
 }}
 """
 
+    # 🤖 Call LLM
     response = call_llm(prompt)
     text = extract_text(response)
 
+    # 🧾 Process Output
     result = extract_json(text)
     result = refine_output(result)
 
