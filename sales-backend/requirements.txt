@@ -1,11 +1,17 @@
-fastapi
-uvicorn
-faiss-cpu
-numpy
-requests
-python-dotenv
-pydantic
+fastapi==0.115.0
+uvicorn==0.30.6
+pydantic==2.9.2
 
-sentence-transformers==2.2.2
+faiss-cpu==1.8.0
+numpy==1.26.4
+
+requests==2.32.3
+python-dotenv==1.0.1
+
 torch==2.2.2
+torchvision==0.17.2
+transformers==4.41.2
+sentence-transformers==2.7.0
+huggingface-hub==0.23.2
+
 --extra-index-url https://download.pytorch.org/whl/cpu
