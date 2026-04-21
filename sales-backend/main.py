@@ -13,176 +13,239 @@ from sentence_transformers import SentenceTransformer
 load_dotenv()
 
 app = FastAPI()
-
-# -----------------------------
-# 🔥 Base Directory
-# -----------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# -----------------------------
-# 🔥 Load Model (SAFE)
-# -----------------------------
-embedding_model = None
-
-try:
-    print("⏳ Loading embedding model...")
-    embedding_model = SentenceTransformer(os.path.join(BASE_DIR, "model"))
-    print("✅ Model loaded successfully")
-except Exception as e:
-    print("❌ Model loading failed:", e)
-
-# -----------------------------
-# 🔥 Load FAISS + Data (SAFE)
-# -----------------------------
-try:
-    index = faiss.read_index(os.path.join(BASE_DIR, "faiss_index.bin"))
-    with open(os.path.join(BASE_DIR, "chunks.pkl"), "rb") as f:
-        chunks = pickle.load(f)
-    print("✅ FAISS + chunks loaded")
-except Exception as e:
-    print("❌ Error loading FAISS/chunks:", e)
-    index = None
-    chunks = []
-
-# -----------------------------
-# 🔐 API Key
-# -----------------------------
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# -----------------------------
-# 🧠 Helper Functions
-# -----------------------------
-def retrieve(query, k=3):
+
+class TranscriptRequest(BaseModel):
+    query: str
+
+
+embedding_model = None
+index = None
+chunks = []
+
+
+def load_rag_components():
+    global embedding_model, index, chunks
+
+    try:
+        embedding_model = SentenceTransformer(os.path.join(BASE_DIR, "model"))
+        print("Embedding model loaded")
+    except Exception as e:
+        print("Embedding model unavailable:", e)
+
+    try:
+        index = faiss.read_index(os.path.join(BASE_DIR, "faiss_index.bin"))
+
+        with open(os.path.join(BASE_DIR, "chunks.pkl"), "rb") as f:
+            chunks = pickle.load(f)
+
+        print("Vector index loaded")
+    except Exception as e:
+        print("Vector index unavailable:", e)
+
+
+load_rag_components()
+
+
+def retrieve_context(query: str, k: int = 3):
     if embedding_model is None or index is None:
         return []
 
     try:
-        query_embedding = embedding_model.encode([query])
-        distances, indices = index.search(np.array(query_embedding), k)
+        query_vector = embedding_model.encode([query])
+        _, indices = index.search(np.array(query_vector), k)
+
         return [chunks[i] for i in indices[0] if i < len(chunks)]
     except Exception as e:
-        print("Retrieve error:", e)
+        print("Retrieval failed:", e)
         return []
 
-def call_llm(prompt):
+
+def call_llm(prompt: str):
     try:
-        url = "https://openrouter.ai/api/v1/chat/completions"
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "meta-llama/llama-3-8b-instruct",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0,
+                "max_tokens": 1400
+            },
+            timeout=30
+        )
 
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
-        }
-
-        data = {
-            "model": "meta-llama/llama-3-8b-instruct",
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.2
-        }
-
-        response = requests.post(url, headers=headers, json=data, timeout=20)
         return response.json()
 
     except Exception as e:
-        print("LLM error:", e)
+        print("LLM request failed:", e)
         return {}
+
 
 def extract_text(response):
     try:
         return response["choices"][0]["message"]["content"]
-    except:
+    except Exception:
         return str(response)
 
-def extract_json(text):
+
+def parse_json(text):
     try:
         return json.loads(text)
-    except:
+    except Exception:
         match = re.search(r"\{.*\}", text, re.DOTALL)
+
         if match:
             try:
                 return json.loads(match.group())
-            except:
+            except Exception:
                 pass
 
     return {
-        "summary": "Analysis unavailable",
-        "customer_intent": "Medium",
+        "call_summary": "Analysis unavailable",
+        "lead_score": 50,
+        "conversion_probability": "Medium",
+        "customer_intent": {
+            "level": "Medium",
+            "reason": "Unable to determine confidently"
+        },
+        "sentiment_analysis": {
+            "overall": "Neutral",
+            "confidence": 0.5
+        },
         "objections": [],
         "buying_signals": [],
-        "next_action": "Retry analysis"
+        "urgency_level": "Low",
+        "decision_stage": "Unknown",
+        "competitor_mentions": [],
+        "next_best_action": {
+            "action": "Retry analysis",
+            "priority": "Medium",
+            "owner": "Sales Rep"
+        },
+        "follow_up_email_draft": "",
+        "crm_fields": {
+            "budget_status": "Unknown",
+            "timeline": "Unknown",
+            "decision_maker_identified": False
+        },
+        "risk_flags": [],
+        "key_quotes": []
     }
 
-def refine_output(data):
-    weak_phrases = ["need to think", "not sure", "maybe later"]
 
-    try:
-        if any(p in data["next_action"].lower() for p in weak_phrases):
-            data["next_action"] = "Follow up with the customer to address concerns"
-    except:
-        pass
+def build_prompt(transcript: str, context: str):
+    return f"""
+You are an AI Sales Call Intelligence Engine.
 
-    return data
+Use the transcript as the primary source of truth.
+Use retrieved context only as supporting memory.
+Do not invent facts, objections, urgency, or buying signals.
+If unclear, keep arrays empty.
+Return only valid JSON.
 
-# -----------------------------
-# 📦 Request Schema
-# -----------------------------
-class TranscriptRequest(BaseModel):
-    query: str
+Lead Score:
+0-30 Cold
+31-60 Moderate
+61-80 Warm
+81-100 Hot
 
-# -----------------------------
-# 🏠 Health Check (IMPORTANT)
-# -----------------------------
-@app.get("/")
-def home():
-    return {"status": "running"}
+Decision Stage:
+Awareness | Consideration | Negotiation | Closing | Lost | Unknown
 
-# -----------------------------
-# 🚀 MAIN API
-# -----------------------------
-@app.post("/analyze")
-def analyze(request: TranscriptRequest):
+Transcript:
+{transcript}
 
-    query = request.query.strip()
-
-    # ❌ Input validation
-    if not query or len(query) < 10:
-        return {
-            "summary": "Input too short",
-            "customer_intent": "Low",
-            "objections": [],
-            "buying_signals": [],
-            "next_action": "Provide a valid transcript"
-        }
-
-    # 🔍 Retrieve context
-    retrieved_chunks = retrieve(query)
-    context = "\n".join(retrieved_chunks) if retrieved_chunks else "No relevant context found"
-
-    # 🧠 Prompt
-    prompt = f"""
-You are an AI Sales Call Intelligence System.
-
-Analyze the conversation and extract BUSINESS-LEVEL insights.
-
-Context:
+Supporting Context:
 {context}
 
-Return ONLY valid JSON:
+Return JSON:
 
 {{
-  "summary": "...",
-  "customer_intent": "High | Medium | Low",
-  "objections": ["..."],
-  "buying_signals": ["..."],
-  "next_action": "..."
+  "call_summary": "",
+  "lead_score": 0,
+  "conversion_probability": "High | Medium | Low",
+
+  "customer_intent": {{
+    "level": "High | Medium | Low",
+    "reason": ""
+  }},
+
+  "sentiment_analysis": {{
+    "overall": "Positive | Neutral | Negative",
+    "confidence": 0.0
+  }},
+
+  "objections": [
+    {{
+      "type": "",
+      "severity": "High | Medium | Low",
+      "quote": ""
+    }}
+  ],
+
+  "buying_signals": [
+    {{
+      "signal": "",
+      "strength": "High | Medium | Low"
+    }}
+  ],
+
+  "urgency_level": "High | Medium | Low",
+  "decision_stage": "",
+
+  "competitor_mentions": [],
+
+  "next_best_action": {{
+    "action": "",
+    "priority": "High | Medium | Low",
+    "owner": "Sales Rep"
+  }},
+
+  "follow_up_email_draft": "",
+
+  "crm_fields": {{
+    "budget_status": "",
+    "timeline": "",
+    "decision_maker_identified": true
+  }},
+
+  "risk_flags": [],
+  "key_quotes": []
 }}
 """
 
-    # 🤖 Call LLM
+
+@app.get("/")
+def home():
+    return {
+        "status": "running",
+        "rag_ready": embedding_model is not None and index is not None
+    }
+
+
+@app.post("/analyze")
+def analyze(request: TranscriptRequest):
+    transcript = request.query.strip()
+
+    if len(transcript) < 10:
+        return {
+            "call_summary": "Input too short",
+            "lead_score": 0,
+            "conversion_probability": "Low"
+        }
+
+    context_chunks = retrieve_context(transcript)
+    context = "\n".join(context_chunks) if context_chunks else "No relevant context found."
+
+    prompt = build_prompt(transcript, context)
+
     response = call_llm(prompt)
     text = extract_text(response)
 
-    # 🧾 Process Output
-    result = extract_json(text)
-    result = refine_output(result)
-
-    return result
+    return parse_json(text)
