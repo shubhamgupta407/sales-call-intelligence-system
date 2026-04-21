@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import faiss
 import pickle
@@ -13,6 +14,16 @@ from sentence_transformers import SentenceTransformer
 load_dotenv()
 
 app = FastAPI()
+
+# CORS fix for frontend integration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
