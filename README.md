@@ -141,7 +141,7 @@ Frontend Dashboard Visualization
 
 ## 🔥 Live Demo
 
-**Frontend:** https://salesanalyze.netlify.app
+**Frontend:** https://analyzesales.netlify.app/
 
 **Backend API:** Deployed on Render (free tier cold start may delay first request)
 
