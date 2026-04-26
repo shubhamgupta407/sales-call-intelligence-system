@@ -146,28 +146,66 @@ def parse_json(text):
             "decision_maker_identified": False
         },
         "risk_flags": [],
-        "key_quotes": []
+        "key_quotes": [],
+        "action_directives": [],
+        "intent_analysis": {
+            "budget_alignment": {"status": "UNVERIFIED", "confidence": 0, "evidence": ""},
+            "timeline_clarity": {"status": "UNCLEAR", "confidence": 0, "evidence": ""},
+            "decision_authority": {"status": "UNKNOWN", "confidence": 0, "evidence": ""}
+        }
     }
 
 
 def build_prompt(transcript: str, context: str):
     return f"""
-You are an AI Sales Call Intelligence Engine.
+You are a senior B2B Revenue Intelligence AI. Analyze the sales call transcript below with precision.
+Use the transcript as the PRIMARY source of truth. Use retrieved context only as supporting memory.
+Do NOT invent facts, objections, signals, or quotes that are not present in the transcript.
+Return ONLY valid JSON. No explanation. No markdown. No code blocks.
 
-Use the transcript as the primary source of truth.
-Use retrieved context only as supporting memory.
-Do not invent facts, objections, urgency, or buying signals.
-If unclear, keep arrays empty.
-Return only valid JSON.
+SCORING RULES for lead_score (0-100):
+- Budget confirmed or clearly implied in transcript: +25
+- Decision maker present or identified: +20
+- Clear timeline or urgency expressed: +20
+- Competitor evaluation mentioned (risk factor): -15
+- Objections raised and NOT resolved in call: -10 per objection
+- Next step agreed upon during call: +15
+- Overall positive sentiment: +10
+The lead_score MUST be mathematically consistent with sentiment_analysis, customer_intent, and crm_fields.
+If sentiment is Positive and budget is confirmed and decision maker is identified, score MUST be above 60.
 
-Lead Score:
-0-30 Cold
-31-60 Moderate
-61-80 Warm
-81-100 Hot
+EXECUTIVE SUMMARY RULES for call_summary:
+- Must be 3-4 sentences minimum
+- Must mention the specific product/service discussed in the transcript
+- Must reference the customer's specific pain point from the transcript
+- Must mention any competitors or alternatives the customer named
+- Must state the current deal stage based on conversation evidence
+- Must be written in professional third-person enterprise language
+- NEVER write generic phrases like "Strategic analysis complete" or "Review action directives"
 
-Decision Stage:
-Awareness | Consideration | Negotiation | Closing | Lost | Unknown
+ACTION DIRECTIVES RULES for action_directives:
+- Generate exactly 3 specific next-best actions
+- Each action MUST reference something explicitly mentioned in this transcript
+- Actions must be concrete: who to contact, what to send, what to address
+- If competitor names appear in transcript, one action must be a competitive response
+- NEVER generate generic actions like "follow up with customer" or "schedule a call"
+
+FOLLOW-UP EMAIL RULES for follow_up_email_draft:
+- MUST always generate a complete email, never leave empty
+- Subject line must reference the specific conversation topic
+- Opening must acknowledge the customer's specific pain point from the transcript
+- Middle must address any objections or competitors mentioned
+- Must include one clear CTA
+- Max 150 words
+- Use "Hi there" if customer name is unknown
+- Return as plain text with Subject: on first line, then blank line, then body
+
+INTENT ANALYSIS RULES for intent_analysis:
+- budget_alignment status: VERIFIED (explicitly confirmed) | PARTIAL (implied) | UNVERIFIED (not mentioned)
+- timeline_clarity status: CONFIRMED (date/timeframe given) | PENDING (mentioned but vague) | UNCLEAR (not discussed)
+- decision_authority status: CONFIRMED (decision maker on call) | SHARED (multiple stakeholders) | UNKNOWN (not established)
+- confidence: 0-100 based on how clearly the transcript supports the status
+- evidence: exact quote or direct signal from the transcript that justifies the status
 
 Transcript:
 {transcript}
@@ -175,16 +213,16 @@ Transcript:
 Supporting Context:
 {context}
 
-Return JSON:
+Return this exact JSON structure with all fields populated based on the transcript:
 
 {{
-  "call_summary": "",
+  "call_summary": "<3-4 sentence specific summary referencing transcript content>",
   "lead_score": 0,
   "conversion_probability": "High | Medium | Low",
 
   "customer_intent": {{
     "level": "High | Medium | Low",
-    "reason": ""
+    "reason": "<specific reason grounded in transcript>"
   }},
 
   "sentiment_analysis": {{
@@ -194,40 +232,64 @@ Return JSON:
 
   "objections": [
     {{
-      "type": "",
+      "type": "<specific objection type from transcript>",
       "severity": "High | Medium | Low",
-      "quote": ""
+      "quote": "<exact or paraphrased quote from transcript>"
     }}
   ],
 
   "buying_signals": [
     {{
-      "signal": "",
+      "signal": "<specific signal from transcript>",
       "strength": "High | Medium | Low"
     }}
   ],
 
   "urgency_level": "High | Medium | Low",
-  "decision_stage": "",
+  "decision_stage": "Awareness | Consideration | Negotiation | Closing | Lost | Unknown",
 
-  "competitor_mentions": [],
+  "competitor_mentions": ["<only competitors explicitly named in transcript>"],
 
   "next_best_action": {{
-    "action": "",
+    "action": "<specific action referencing transcript content>",
     "priority": "High | Medium | Low",
     "owner": "Sales Rep"
   }},
 
-  "follow_up_email_draft": "",
+  "action_directives": [
+    "<specific action 1 referencing transcript>",
+    "<specific action 2 referencing transcript>",
+    "<specific action 3 referencing transcript>"
+  ],
+
+  "follow_up_email_draft": "<Subject: ...\n\nHi there,\n\n...full email body here...>",
 
   "crm_fields": {{
-    "budget_status": "",
-    "timeline": "",
+    "budget_status": "<Confirmed | Implied | Unknown>",
+    "timeline": "<specific timeline if mentioned, else Unknown>",
     "decision_maker_identified": true
   }},
 
-  "risk_flags": [],
-  "key_quotes": []
+  "intent_analysis": {{
+    "budget_alignment": {{
+      "status": "VERIFIED | PARTIAL | UNVERIFIED",
+      "confidence": 0,
+      "evidence": "<quote or signal from transcript>"
+    }},
+    "timeline_clarity": {{
+      "status": "CONFIRMED | PENDING | UNCLEAR",
+      "confidence": 0,
+      "evidence": "<quote or signal from transcript>"
+    }},
+    "decision_authority": {{
+      "status": "CONFIRMED | SHARED | UNKNOWN",
+      "confidence": 0,
+      "evidence": "<quote or signal from transcript>"
+    }}
+  }},
+
+  "risk_flags": ["<only real risks evident in transcript>"],
+  "key_quotes": ["<important quotes directly from transcript>"]
 }}
 """
 
