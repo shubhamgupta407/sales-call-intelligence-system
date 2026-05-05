@@ -17,7 +17,20 @@ Analyze sales conversations, uncover buying intent, detect objections, score opp
 
 ### Built to simulate real-world B2B Sales Intelligence Infrastructure
 
-### Still in development process
+## 🚧 Project Status
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Status-Active%20Development-blueviolet?style=for-the-badge&logo=github" />
+</p>
+
+<p align="center">
+  <img src="https://readme-typing-svg.herokuapp.com?font=Inter&weight=600&size=22&duration=3000&pause=1000&color=00F7FF&center=true&vCenter=true&width=600&lines=Building+Production-Grade+AI+Workflows...;Optimizing+RAG+Pipelines+%26+LLM+Accuracy...;Scaling+for+Real-World+B2B+Use+Cases..." />
+</p>
+
+<p align="center">
+  ⚡ This system is actively evolving with new capabilities, optimizations, and real-world testing.
+</p>
+
 </div>
 
 
