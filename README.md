@@ -17,6 +17,7 @@ Analyze sales conversations, uncover buying intent, detect objections, score opp
 
 ### Built to simulate real-world B2B Sales Intelligence Infrastructure
 
+### Still in development process
 </div>
 
 
